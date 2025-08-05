@@ -1,0 +1,934 @@
+openapi: 3.0.3
+info:
+  title: Society Management Portal API
+  version: 1.0.0
+  description: API for authentication and society modules
+servers:
+  - url: http://localhost:8080/api/v1
+# security:
+#   - bearerAuth: []    
+  
+paths:
+  /users:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      description: Creates a new user account with a role like owner, tenant, security, or admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+                - role
+              properties:
+                username:
+                  type: string
+                  example: rita.sharma@example.com
+                password:
+                  type: string
+                  example: rita123
+                role:
+                  type: string
+                  enum: [owner, tenant, security, admin]
+                  example: owner
+      responses:
+        "200":
+          description: Login successful
+          content:
+           application/json:
+             schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          description: Bad Request (missing or invalid fields)
+          content:
+            application/json:
+              example:
+                message: Role must be one of owner, tenant, security, admin
+
+  /login:
+    post:
+      tags:
+        - Authentication
+      summary: Login for all users (owner, tenant, security, admin)
+      description: |
+        Authenticates the user using their registered credentials (username and password).
+        On success, returns a JWT token that includes the user's role and ID.
+        The role is fetched from the database and not supplied by the user.
+        Use this token to access all protected endpoints.
+        Pass it in the `Authorization` header as: `Bearer <your_token>`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  example: rita.sharma@example.com
+                password:
+                  type: string
+                  example: rita123
+      responses:
+        "200":
+          description: Login   successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              example:
+                message: Invalid username or password
+
+  /logout:
+    post:
+      tags:
+        - Authentication
+      summary: Logout user
+      description: Logs out the currently authenticated user.
+      responses:
+        "200":
+          description: Successfully logged out
+          content:
+            application/json:
+              example:
+                message: User logged out
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              example:
+                message: Invalid or expired token
+
+              
+  /visitors:
+    post:
+      tags:
+      - Visitor Management
+      summary: Register an invited visitor (by owner)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/visitors_body"
+        required: true
+      responses:
+        "201":
+          description: Visitor registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VisitorRegisteredResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              example:
+                message: "Missing required field: visitTime"
+  /visitors/walkin:
+    post:
+      tags:
+      - Visitor Management
+      summary: Register a walk-in visitor (manual entry at gate)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/visitors_walkin_body"
+        required: true
+      responses:
+        "202":
+          description: Approval request sent
+          content:
+            application/json:
+              example:
+                status: pending
+                message: Approval request sent to flat owner
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              example:
+                message: Invalid visitor data
+  /visitors/approval:    # <-- this line was incorrectly placed before
+    post:
+      tags:
+        - Visitor Management
+      summary: Approve or reject walk-in visitor and generate pass
+      description: |
+         [Owners/Tenants only] – This endpoint allows flat residents 
+         (owners or tenants) to view attendance logs of staff assigned 
+         to their flats.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/visitors_approval_body"
+        required: true
+      responses:
+        "200":
+          description: Approval updated, pass (QR) generated
+          content:
+            application/json:
+              example:
+                approved: true
+                visitorId: 201
+                passCode: VIS123XYZ
+                qrCodeUrl: https://societyhub.com/qr/VIS123XYZ
+                expiresAt: 2025-08-02T18:00:00Z
+                visitorName: Sneha Kumari
+                flatNumber: B-204
+        "404":
+          description: Visitor not found
+          content:
+            application/json:
+              example:
+                message: Visitor not found with ID 201
+
+  /workers:
+    post:
+      tags:
+      - Worker Management
+      summary: Register a new worker
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkerBody"
+        required: true
+      responses:
+        "201":
+          description: Worker registered successfully
+          content:
+            application/json:
+              example:
+                message: " Worker registered successfully"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              example:
+                message: "Worker not registered"
+  /workers/{id}:
+    get:
+      tags:
+        - Worker Management
+      summary: Get worker details by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Worker details returned
+          content:
+            application/json:
+              example:
+                id: 503
+                name: "Rajesh Kumar"
+                phone: "9811223344"
+                staffType: "guard"
+                assignedFlat: null
+                workTiming: "6AM - 2PM"
+                passExpiry: "2025-08-31"
+        "404":
+          description: Worker not found
+          content:
+            application/json:
+              example:
+                message: "Worker not found"
+
+
+    put:
+      tags:
+      - Worker Management
+      summary: Update worker profile
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - phone
+              - workTiming
+              properties:
+                phone:
+                  type: string
+                  example: "9876543210"
+                workTiming:
+                  type: string
+                  example: "9AM - 6PM"
+      responses:
+        "200":
+          description: Worker profile updated
+          content:
+            application/json:
+              example:
+                message: "Worker profile updated successfully"
+        "404":
+          description: Worker not found
+          content:
+            application/json:
+              example:
+                message: "Worker not found"
+
+    delete:
+      tags:
+      - Worker Management
+      summary: Delete a worker
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        "204":
+          description: Worker deletedsuccessfully (no content)
+          content:
+            application/json:
+              example:
+                message: "Worker removed from the system"
+        "404":
+          description: Worker not found
+          content:
+            application/json:
+              example:
+                message: "Worker not found"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                 message: "Internal error while deleting worker"     
+
+  /workers/{id}/renew-pass:
+    post:
+      tags:
+      - Worker Management
+      summary: Renew monthly pass for a worker
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        "200":
+          description: Pass renewed successfully
+          content:
+            application/json:
+              example:
+                message: "Gate pass renewed till 2025-09-30"
+        "404":
+          description: Worker not found
+          content:
+            application/json:
+              example:
+                message: "Worker not found"
+
+  /attendance/scan:
+    post:
+      tags:
+      - Attendance
+      summary: Mark staff attendance via QR
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/attendance_scan_body"
+        required: true
+      responses:
+        "200":
+          description: Attendance marked
+          content:
+            application/json:
+              example:
+                message: Attendance recorded
+        "404":
+          description: Staff not found
+          content:
+            application/json:
+              example:
+                message: Staff not found with ID 501
+  /attendance/{staffId}:
+    get:
+      tags:
+      - Attendance
+      summary: Get monthly attendance report
+      parameters:
+      - name: staffId
+        in: path
+        required: true
+        schema:
+          type: integer
+        example: 501
+      - name: month
+        in: query
+        required: false
+        schema:
+          type: string
+        example: 2025-08
+      responses:
+        "200":
+          description: Attendance report
+          content:
+            application/json:
+              example:
+                staffId: 501
+                records:
+                - date: 2025-08-01
+                  time: 09:00
+                  location: Main Gate
+                - date: 2025-08-02
+                  time: 09:01
+                  location: Main Gate
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                 $ref: "#/components/schemas/ErrorResponse"
+              example:
+                  message: "Unexpected server error occurred"
+          
+  /delivery:
+    post:
+      tags:
+      - Delivery Entry
+      summary: Register delivery entry
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/delivery_body"
+        required: true
+      responses:
+        "201":
+          description: Delivery logged
+          content:
+            application/json:
+              example:
+                deliveryId: 601
+                status: logged
+                timestamp: 2025-08-02T17:15:00Z
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              example:
+                message: Invalid delivery input
+  /delivery/authorize:
+    post:
+      tags:
+      - Delivery Entry
+      summary: Approve delivery entry
+      description: |
+        [Owners/Tenants only] – This endpoint allows a flat's owner or tenant 
+        to approve or reject a delivery entry request submitted by security staff. Upon approval, the delivery person is granted access to the flat premises.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/delivery_authorize_body"
+        required: true
+      responses:
+        "200":
+          description: Delivery approved
+          content:
+            application/json:
+              example:
+                status: approved
+                deliveryId: 601
+                message: Delivery access granted
+        "404":
+          description: Entry not found
+          content:
+            application/json:
+              example:
+                message: Delivery entry not found with ID 601
+  /flats:
+    post:
+      tags:
+      - Flats & Owners
+      summary: Register flat and owner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/flats_body"
+        required: true
+      responses:
+        "201":
+          description: Flat registered
+          content:
+            application/json:
+              example:
+                flatId: 403
+                status: registered
+                ownerId: 123
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              example:
+                message: Missing flat number
+  /flats/owners/{ownerId}:
+    get:
+      tags:
+        - Flats & Owners
+      summary: Get contact information of a specific flat owner
+      description: Retrieves the contact details for the flat owner with the given ID.
+      parameters:
+        - name: ownerId
+          in: path
+          required: true
+          description: Unique ID of the flat owner
+          schema:
+            type: integer
+            example: 101
+      responses:
+        "200":
+          description: Owner details retrieved
+          content:
+            application/json:
+              example:
+                ownerId: 101
+                name: Anil Verma
+                flatNumber: D-403
+                contact: anil.verma@gmail.com
+        "404":
+          description: Owner not found
+          content:
+            application/json:
+              example:
+                message: Owner with ID 101 not found
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                 message: "Failed to fetch data from the database. Please try again later." 
+                      
+ 
+    put:
+      tags:
+        - Flats & Owners
+      summary: Update contact information of a specific flat owner
+      description: Updates the contact information for the flat owner with the given ID.
+      parameters:
+        - name: ownerId
+          in: path
+          required: true
+          description: Unique ID of the flat owner
+          schema:
+            type: integer
+            example: 101
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/flats_owners_body"
+      responses:
+        "200":
+          description: Owner contact updated
+          content:
+            application/json:
+              example:
+                message: Contact info updated for ownerId 101
+        "404":
+          description: Owner not found
+          content:
+            application/json:
+              example:
+                message: Owner with ID 101 not found
+
+
+
+  /flats/{flatNumber}/staff/attendance:
+    get:
+      tags:
+      - Flats & Owners
+      summary: Get attendance logs of flat-assigned staff (owners/tenants only)
+      description: |
+        Allows flat owners or tenants to view attendance of their assigned staff (maids, cooks, etc).
+        System verifies the user's access to this flat before returning data.
+      parameters:
+      - name: flatNumber
+        in: path
+        required: true
+        schema:
+          type: string
+          example: A-102
+      - name: month
+        in: query
+        required: false
+        schema:
+          type: string
+          example: 2025-08
+      - name: staffId
+        in: query
+        required: false
+        schema:
+          type: integer
+          example: 501    
+      responses:
+        "200":
+          description: Attendance report
+          content:
+            application/json:
+              example:
+                flatNumber: A-102
+                staffAttendance:
+                - staffId: 601
+                  name: Maya
+                  date: 2025-08-01
+                  time: 09:00
+                  location: Main Gate
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              example:
+                message: "Access denied: Not authorized for this flat"
+  /admin/dashboard:
+    get:
+      tags:
+      - Admin
+      summary: Get system overview dashboard
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              example:
+                totalFlats: 120
+                activeStaff: 25
+                visitorsToday: 18
+                deliveriesToday: 9
+  /admin/logs/attendance:
+   get:
+    tags:
+      - Admin
+    summary: Get daily attendance logs of society-wide staff (admin only)
+    description: |
+      This API provides attendance logs of all common society staff such as guards, cleaners, etc.
+      Only users with 'admin' role are allowed.
+      You can filter logs by date and/or staffId.
+    parameters:
+      - name: date
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+          example: 2025-08-02
+      - name: staffId
+        in: query
+        required: false
+        schema:
+          type: integer
+          example: 501
+    responses:
+      "200":
+        description: Attendance logs
+        content:
+          application/json:
+            example:
+              date: 2025-08-02
+              logs:
+                - staffId: 501
+                  name: Rani Devi
+                  role: Guard
+                  time: 09:01
+                  location: Main Gate
+      "403":
+        description: Forbidden
+        content:
+          application/json:
+            example:
+              message: "Access denied: Admins only"
+  /admin/staff/expiry-alerts:
+    get:
+      tags:
+        - Admin
+      summary: Get upcoming staff pass expiry alerts
+      description: |
+        Returns a list of staff members whose gate passes are about to expire.
+        Useful for admins to manage pass renewals proactively.
+        You can filter results by expiry date, staff type, and assignment scope.
+      parameters:
+        - in: query
+          name: before
+          schema:
+            type: string
+            format: date
+            example: 2025-09-01
+          required: false
+          description: Return staff passes expiring before this date
+
+        - in: query
+          name: staffType
+          schema:
+            type: string
+            enum: [maid, cook, cleaner, guard, driver, gardener, others]
+            example: maid
+          required: false
+          description: Filter alerts by staff type
+
+        - in: query
+          name: assignedTo
+          schema:
+            type: string
+            enum: [flat, society]
+            example: society
+          required: false
+          description: |
+            Filter by assignment scope:
+            - flat: Assigned to individual flats (e.g., maids, cooks)
+            - society: Common staff (e.g., guards, cleaners)
+
+      responses:
+        "200":
+          description: Expiry alerts list
+          content:
+            application/json:
+              example:
+                alerts:
+                  - staffId: 501
+                    name: Rani Devi
+                    staffType: maid
+                    assignedTo: flat
+                    expiresAt: 2025-08-31
+                  - staffId: 503
+                    name: Sita Kumari
+                    staffType: guard
+                    assignedTo: society
+                    expiresAt: 2025-08-29
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              example:
+                message: Invalid or expired token
+        "500":
+          description: Internal server error while fetching expiry alerts
+          content:
+            application/json:
+             example:
+              message: "Unexpected error occurred while querying the database"
+
+
+               
+
+                
+components:
+  securitySchemes:
+    bearerAuth:
+        type: http
+        scheme: bearer
+        bearerFormat: JWT
+  schemas:
+    LoginResponse:
+       type: object
+       properties:
+        token:
+          type: string
+          description: JWT token to be used for authenticated requests
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        userId:
+          type: integer
+          description: Unique identifier of the logged-in user
+          example: 101
+        role:
+          type: string
+          description: Role of the user (e.g., owner, tenant, security, admin)
+          example: owner
+    VisitorRegisteredResponse:
+       type: object
+       properties:
+         visitorId:
+           type: integer
+         passCode:
+           type: string
+         expiresAt:
+           type: string
+           format: date-time
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+    visitors_body:
+      required:
+      - flatNumber
+      - ownerId
+      - visitTime
+      - visitorName
+      type: object
+      properties:
+        ownerId:
+          type: integer
+          example: 101
+        visitorName:
+          type: string
+          example: Rahul Sharma
+        flatNumber:
+          type: string
+          example: A-102
+        visitTime:
+          type: string
+          format: date-time
+          example: 2025-08-02T14:30:00Z
+    visitors_walkin_body:
+      required:
+      - flatNumber
+      - visitorName
+      type: object
+      properties:
+        visitorName:
+          type: string
+          example: Sneha Kumari
+        flatNumber:
+          type: string
+          example: B-204
+    visitors_approval_body:
+      required:
+      - isApproved
+      - ownerId
+      - visitorId
+      type: object
+      properties:
+        visitorId:
+          type: integer
+          example: 201
+        ownerId:
+          type: integer
+          example: 101
+        isApproved:
+          type: boolean
+          example: true
+    WorkerBody:
+      type: object
+      required:
+        - name
+        - phone
+        - staffType
+        - workTiming
+      properties:
+        name:
+          type: string
+          example: "Rani Devi"
+        phone:
+          type: string
+          example: "9876543210"
+        staffType:
+          type: string
+          enum: [maid, guard, cook, cleaner, electrician]
+        assignedFlat:
+          type: string
+          example: "B-102"
+        workTiming:
+          type: string
+          example: "9AM - 6PM"
+
+    attendance_scan_body:
+      required:
+      - location
+      - staffId
+      - timestamp
+      type: object
+      properties:
+        staffId:
+          type: integer
+          example: 501
+        timestamp:
+          type: string
+          format: date-time
+          example: 2025-08-02T09:00:00Z
+        location:
+          type: string
+          example: Main Gate
+    delivery_body:
+      required:
+      - flatNumber
+      - personName
+      type: object
+      properties:
+        personName:
+          type: string
+          example: Amazon Delivery Guy
+        flatNumber:
+          type: string
+          example: C-302
+    delivery_authorize_body:
+      required:
+      - entryId
+      - isApproved
+      - ownerId
+      type: object
+      properties:
+        entryId:
+          type: integer
+          example: 601
+        ownerId:
+          type: integer
+          example: 101
+        isApproved:
+          type: boolean
+          example: true
+    flats_body:
+      required:
+      - contactInfo
+      - flatNumber
+      - ownerName
+      type: object
+      properties:
+        flatNumber:
+          type: string
+          example: D-403
+        ownerName:
+          type: string
+          example: Mr. Anil Verma
+        contactInfo:
+          type: string
+          example: anil.verma@gmail.com
+    flats_owners_body:
+      required:
+      - contactInfo
+      - ownerId
+      type: object
+      properties:
+        ownerId:
+          type: integer
+          example: 101
+        contactInfo:
+          type: string
+          example: new.email@example.com 
